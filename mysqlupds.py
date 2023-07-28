@@ -26,7 +26,7 @@ class PosUpdate(Base):
          return f"Veh {self.veh} line {self.line} @({self.lat},{self.lon}, {self.heading},{self.direct})"
     
     def __hash__(self):
-        return hash((self.line,self.veh,self.lat,self.lon, self.nextStop))
+        return hash((self.line,self.veh,self.lat,self.lon, self.tripId, self.nextStop))
 
     
 """

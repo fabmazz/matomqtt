@@ -80,7 +80,7 @@ dbsess = Session(enginedb)
 client.loop_start()
 try:
     while True:
-        time.sleep(5)
+        time.sleep(10)
         ### insert
         print(f"Have about {COUNT_ADD} rows to insert now")
         listadd=LIST_ADD
