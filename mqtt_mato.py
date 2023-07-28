@@ -10,6 +10,7 @@ import logging
 import sys
 import time
 import json
+#import datetime
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -27,7 +28,7 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-LIST_ADD = []
+LIST_ADD = set() #[]
 
 def on_message(mosq, obj, msg):
     global COUNT_ADD, LIST_ADD
@@ -40,7 +41,7 @@ def on_message(mosq, obj, msg):
 
     ### add to session
     #dbsess.add(posup)
-    LIST_ADD.append(posup)
+    LIST_ADD.add(posup)
     COUNT_ADD+=1
     
 
@@ -65,7 +66,6 @@ client.tls_set()
 
 print("Prop",client._connect_properties)
 client.connect("mapi.5t.torino.it",port=443,keepalive=60)
-print("Connected")
 #client.subscribe("/10/#")
 #client.loop_start()
 #client.loop_forever(timeout=5,retry_first_connection=True)
@@ -84,8 +84,8 @@ try:
         ### insert
         print(f"Have about {COUNT_ADD} rows to insert now")
         listadd=LIST_ADD
-        LIST_ADD = []
-        print(f"list add has {len(listadd)} items")
+        LIST_ADD = set()
+        print(f"list add has {len(listadd)} items - {int(time.time())}")
         dbsess.add_all(listadd)
         dbsess.commit()
         COUNT_ADD = 0
@@ -95,7 +95,7 @@ finally:
     print("Close DB")
     client.loop_stop()
     listadd=LIST_ADD
-    LIST_ADD = []
+    LIST_ADD = set()
     print(f"list add has {len(listadd)} items")
     dbsess.add_all(listadd)
     dbsess.commit()

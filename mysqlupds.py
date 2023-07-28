@@ -24,6 +24,9 @@ class PosUpdate(Base):
 
     def __repr__(self):
          return f"Veh {self.veh} line {self.line} @({self.lat},{self.lon}, {self.heading},{self.direct})"
+    
+    def __hash__(self):
+        return hash((self.line,self.veh,self.lat,self.lon, self.nextStop))
 
     
 """
@@ -49,7 +52,7 @@ def make_update_json(data, line, veh):
         speed=clsorNone(int,data[3]),
         tripId = str(data[4]),
         direct = int(data[5]),
-        nextStop=f"{data[6]}",
+        nextStop="-10" if data[6] is None else f"{data[6]}",
         full = int(data[7]) if len(data)>7 else 0,
         timerec = int(time.time())
         )
