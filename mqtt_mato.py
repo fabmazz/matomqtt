@@ -83,10 +83,12 @@ try:
     while True:
         time.sleep(10)
         ### insert
-        print(f"Have about {COUNT_ADD} rows to insert now")
+        print(f"Should have {COUNT_ADD} entries now")
+        if len(LIST_ADD) < 200:
+            continue
         listadd=LIST_ADD
         LIST_ADD = set()
-        print(f"list add has {len(listadd)} items - {int(time.time())}")
+        print(f"inserting {len(listadd)} updates - {int(time.time())}")
         dbsess.add_all(listadd)
         dbsess.commit()
         COUNT_ADD = 0
