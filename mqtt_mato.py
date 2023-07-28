@@ -29,14 +29,17 @@ logger.addHandler(handler)
 
 
 def on_message(mosq, obj, msg):
+    global COUNT_ADD
     mess=str(msg.payload,"utf-8")
     mm=json.loads(mess)
     _, line, veh = msg.topic.split("/")
-    print(msg.topic + f" {line} {veh} " + str(msg.qos) + " "+str(mm) )
+    #print(msg.topic + f" {line} {veh} " + str(msg.qos) + " "+str(mm) )
+    #print(f"line {line} v {veh}, payload {mm}")
     posup = ups.make_update_json(mm, line, veh)
 
     ### add to session
     dbsess.add(posup)
+    COUNT_ADD+=1
     
 
     
@@ -53,7 +56,7 @@ def on_connect(client, userdata, flags, rc):
     # reconnect then subscriptions will be renewed.
     client.subscribe("#")
 
-client = Client("mtss-uiaoks-76719",transport="websockets")
+client = Client("mtss-ajinoajs-76719",transport="websockets")
 
 #client.enable_logger(logger)
 # Assign event callbacks
@@ -73,8 +76,8 @@ print("Connected")
 #client.loop_forever(timeout=5,retry_first_connection=True)
 
 ## create db
-
-enginedb = create_engine(f"sqlite:///{DB_NAME}",future=True, echo=True)
+COUNT_ADD = 0
+enginedb = create_engine(f"sqlite:///{DB_NAME}",future=True)
 
 ups.Base.metadata.create_all(enginedb)
 dbsess = Session(enginedb)
@@ -82,8 +85,15 @@ dbsess = Session(enginedb)
 client.loop_start()
 try:
     while True:
-        time.sleep(10)
+        time.sleep(5)
+        ### insert
+        print(f"Have about {COUNT_ADD} rows to insert now")
         dbsess.commit()
+        COUNT_ADD = 0
+except Exception as e: 
+    print("Exception happened: ",e)
 finally:
+    print("Close DB")
     client.loop_stop()
+    dbsess.commit()
     dbsess.close()
