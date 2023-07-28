@@ -27,9 +27,10 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
+LIST_ADD = []
 
 def on_message(mosq, obj, msg):
-    global COUNT_ADD
+    global COUNT_ADD, LIST_ADD
     mess=str(msg.payload,"utf-8")
     mm=json.loads(mess)
     _, line, veh = msg.topic.split("/")
@@ -38,16 +39,10 @@ def on_message(mosq, obj, msg):
     posup = ups.make_update_json(mm, line, veh)
 
     ### add to session
-    dbsess.add(posup)
+    #dbsess.add(posup)
+    LIST_ADD.append(posup)
     COUNT_ADD+=1
     
-
-    
-
-def my_on_connect(mosq, obj, rc):
-    global client
-    print("WE HAVE CONNECTION")
-    client.subscribe("10/#")
 
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
@@ -88,6 +83,10 @@ try:
         time.sleep(5)
         ### insert
         print(f"Have about {COUNT_ADD} rows to insert now")
+        listadd=LIST_ADD
+        LIST_ADD = []
+        print(f"list add has {len(listadd)} items")
+        dbsess.add_all(listadd)
         dbsess.commit()
         COUNT_ADD = 0
 except Exception as e: 
@@ -95,5 +94,9 @@ except Exception as e:
 finally:
     print("Close DB")
     client.loop_stop()
+    listadd=LIST_ADD
+    LIST_ADD = []
+    print(f"list add has {len(listadd)} items")
+    dbsess.add_all(listadd)
     dbsess.commit()
     dbsess.close()
