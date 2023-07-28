@@ -10,6 +10,7 @@ import logging
 import sys
 import time
 import json
+import random
 #import datetime
 
 from sqlalchemy import create_engine
@@ -51,8 +52,8 @@ def on_connect(client, userdata, flags, rc):
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
     client.subscribe("#")
-
-client = Client("mtss-ajinoajs-76719",transport="websockets")
+csname = f'{random.randrange(16**6):06x}'
+client = Client(f"mtss-ajino-{csname}",transport="websockets")
 
 #client.enable_logger(logger)
 # Assign event callbacks
@@ -64,7 +65,7 @@ client.ws_set_options(path="/scre",headers={"Origin": "https://mato.muoversiator
  #"User-Agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36"
 client.tls_set()
 
-print("Prop",client._connect_properties)
+print(f"Client id: {client._client_id}")
 client.connect("mapi.5t.torino.it",port=443,keepalive=60)
 #client.subscribe("/10/#")
 #client.loop_start()
