@@ -51,7 +51,7 @@ def make_update_json(data, line, veh):
         heading=clsorNone(int,data[2]),
         speed=clsorNone(int,data[3]),
         tripId = str(data[4]),
-        direct = int(data[5]),
+        direct = -5 if data[5] is None else int(data[5]),
         nextStop="-10" if data[6] is None else f"{data[6]}",
         full = int(data[7]) if len(data)>7 else 0,
         timerec = int(time.time())
