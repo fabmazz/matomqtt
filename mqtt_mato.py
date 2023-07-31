@@ -17,8 +17,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 import mysqlupds as ups
+from datescr import get_name_datetime
 
-DB_NAME = "passaggi_mato.db"
+make_DB_name = lambda: f"passaggi_mato_{get_name_datetime(datetime.now())}.db"
+DB_NAME = make_DB_name()
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -77,9 +79,11 @@ client.connect("mapi.5t.torino.it",port=443,keepalive=60)
 ## create db
 COUNT_ADD = 0
 enginedb = create_engine(f"sqlite:///{DB_NAME}",future=True)
+def start_db_session(engine):
+    ups.Base.metadata.create_all(engine)
+    return Session(engine)
 
-ups.Base.metadata.create_all(enginedb)
-dbsess = Session(enginedb)
+dbsess = start_db_session(enginedb)
 
 client.loop_start()
 try:
@@ -94,6 +98,14 @@ try:
         print(f"inserting {len(listadd)} updates - {int(time.time())}")
         dbsess.add_all(listadd)
         dbsess.commit()
+        ### check if to cut database
+        if make_DB_name() != DB_NAME:
+            ##close DB
+            dbsess.close()
+            DB_NAME = make_DB_name()
+            enginedb = create_engine(f"sqlite:///{DB_NAME}",future=True)
+            dbsess = start_db_session(enginedb)
+        
         COUNT_ADD = 0
 except Exception as e: 
     print("Exception happened: ",e)
