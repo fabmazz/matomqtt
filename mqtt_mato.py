@@ -11,7 +11,7 @@ import sys
 import time
 import json
 import random
-#import datetime
+from datetime import datetime
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -30,6 +30,8 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 LIST_ADD = set() #[]
+format_date_sec = lambda date : f"{date.year}{date.month:02d}{date.day:02d}{date.hour:02d}{date.minute:02d}{date.second:02d}"
+
 
 def on_message(mosq, obj, msg):
     global COUNT_ADD, LIST_ADD
@@ -38,8 +40,9 @@ def on_message(mosq, obj, msg):
     _, line, veh = msg.topic.split("/")
     #print(msg.topic + f" {line} {veh} " + str(msg.qos) + " "+str(mm) )
     #print(f"line {line} v {veh}, payload {mm}")
-    posup = ups.make_update_json(mm, line, veh)
-
+    #nowt = datetime.now()
+    posup = ups.make_update_json(mm, line, veh) # time_r=format_date_sec(nowt))
+    
     ### add to session
     #dbsess.add(posup)
     LIST_ADD.add(posup)

@@ -44,7 +44,7 @@ class PosUpdate(Base):
 clsorNone = lambda cls, inp : cls(inp) if inp is not None else None
 
 ## Convert update to data class
-def make_update_json(data, line, veh):
+def make_update_json(data, line, veh, time_r=None):
     return PosUpdate(line=line,veh=veh, 
         lat=float(data[0]),
         lon=float(data[1]),
@@ -54,7 +54,7 @@ def make_update_json(data, line, veh):
         direct = -5 if data[5] is None else int(data[5]),
         nextStop="-10" if data[6] is None else f"{data[6]}",
         full = int(data[7]) if len(data)>7 else 0,
-        timerec = int(time.time())
+        timerec = int(time.time()) if time_r is None else time_r
         )
 
 def insert_update(dbupdate: PosUpdate,session: Session ):
