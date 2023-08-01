@@ -103,6 +103,7 @@ try:
             ##close DB
             dbsess.close()
             DB_NAME = make_DB_name()
+            print(f"Changing DB, new name: {DB_NAME}")
             enginedb = create_engine(f"sqlite:///{DB_NAME}",future=True)
             dbsess = start_db_session(enginedb)
         

@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 ## name changes every half month
 def get_name_datetime(date):
-    if date.hour >0 and date.hour < 4:
+    if date.hour >=0 and date.hour < 4:
         ## move back date
         actudate = date - timedelta(hours=4,minutes=5)
     else:
