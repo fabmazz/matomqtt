@@ -38,18 +38,23 @@ format_date_sec = lambda date : f"{date.year}{date.month:02d}{date.day:02d}{date
 def on_message(mosq, obj, msg):
     global COUNT_ADD, LIST_ADD
     mess=str(msg.payload,"utf-8")
-    mm=json.loads(mess)
-    _, line, veh = msg.topic.split("/")
-    #print(msg.topic + f" {line} {veh} " + str(msg.qos) + " "+str(mm) )
-    #print(f"line {line} v {veh}, payload {mm}")
-    #nowt = datetime.now()
-    posup = ups.make_update_json(mm, line, veh) # time_r=format_date_sec(nowt))
+    try:
+        mm=json.loads(mess)
     
-    ### add to session
-    #dbsess.add(posup)
-    LIST_ADD.add(posup)
-    COUNT_ADD+=1
-    
+        _, line, veh = msg.topic.split("/")
+        #print(msg.topic + f" {line} {veh} " + str(msg.qos) + " "+str(mm) )
+        #print(f"line {line} v {veh}, payload {mm}")
+        #nowt = datetime.now()
+        posup = ups.make_update_json(mm, line, veh) # time_r=format_date_sec(nowt))
+        
+        ### add to session
+        #dbsess.add(posup)
+        LIST_ADD.add(posup)
+        COUNT_ADD+=1
+     
+    except Exception as e:
+        print(f"An error happened during decoding at time {int(time.time())}, message is: \n\t{mess},\n\texception: {e}",
+               file=sys.stderr)
 
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
