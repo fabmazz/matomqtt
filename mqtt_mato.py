@@ -12,14 +12,14 @@ import json
 import random
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
-
+from pathlib import Path
 from paho.mqtt.client import Client
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 import mysqlupds as ups
-import matolib
+import matolib, iolib
 from datescr import get_name_datetime
 
 executor = ThreadPoolExecutor(4)
@@ -28,11 +28,19 @@ executor = ThreadPoolExecutor(4)
 make_DB_name = lambda: f"passaggi_mato_{get_name_datetime(datetime.now())}.db"
 DB_NAME = make_DB_name()
 
+PATTERNS_FNAME =Path(f"patterns_{get_name_datetime(datetime.now())}.json.zstd")
+
+if(PATTERNS_FNAME.exists()):
+    PATTERNS_DOWN = iolib.read_json_zstd(PATTERNS_FNAME)
+else:
+    print("No patterns file")
+    PATTERNS_DOWN = {}
+
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(logging.DEBUG)
+#handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -41,6 +49,15 @@ LIST_ADD = set() #[]
 TRIPS_DOWN = []
 DOWNLOADED_TRIPS = set()
 format_date_sec = lambda date : f"{date.year}{date.month:02d}{date.day:02d}{date.hour:02d}{date.minute:02d}{date.second:02d}"
+
+def download_patternInfo(patterncode):
+    try:
+        pattern = matolib.get_pattern_info(patterncode)
+
+        code = pattern["code"]
+        PATTERNS_DOWN[code] = pattern
+    except Exception:
+        print(f"Cannot download pattern {patterncode}")
 
 def download_tripinfo(tripNumeric):
     gtfsid=f"gtt:{tripNumeric}U"
@@ -55,6 +72,10 @@ def download_tripinfo(tripNumeric):
         
         TRIPS_DOWN.append(tripelm)
         DOWNLOADED_TRIPS.add(gtfsid)
+
+        patCode = tripelm.patternCode
+        if(patCode not in PATTERNS_DOWN):
+            executor.submit(download_patternInfo, patCode)
     except Exception:
         ### nothing work
         print(f"Failed to download data for trip {tripNumeric}",file=sys.stderr)
@@ -119,6 +140,10 @@ def start_db_session(engine):
 
 dbsess = start_db_session(enginedb)
 
+trips_pres = dbsess.scalars(select(ups.GtfsTrip)).all()
+for tr in trips_pres:
+    DOWNLOADED_TRIPS.add(tr.gtfsId)
+
 client.loop_start()
 try:
     while True:
@@ -135,6 +160,7 @@ try:
         dbsess.add_all(listadd)
         dbsess.add_all(trips_add)
         dbsess.commit()
+        iolib.save_json_zstd(PATTERNS_FNAME, PATTERNS_DOWN, level=10)
         ### check if to cut database
         if make_DB_name() != DB_NAME:
             ##close DB
@@ -143,6 +169,8 @@ try:
             print(f"Changing DB, new name: {DB_NAME}")
             enginedb = create_engine(f"sqlite:///{DB_NAME}",future=True)
             dbsess = start_db_session(enginedb)
+            PATTERNS_FNAME =Path(f"patterns_{get_name_datetime(datetime.now())}.json.zstd")
+
         
         COUNT_ADD = 0
 except Exception as e: 
@@ -152,7 +180,12 @@ finally:
     client.loop_stop()
     listadd=LIST_ADD
     LIST_ADD = set()
+    trips_add = TRIPS_DOWN
+    TRIPS_DOWN = list()
     print(f"list add has {len(listadd)} items")
     dbsess.add_all(listadd)
+    dbsess.add_all(trips_add)
+    iolib.save_json_zstd(PATTERNS_FNAME, PATTERNS_DOWN, level=10)
     dbsess.commit()
     dbsess.close()
+    executor.shutdown()

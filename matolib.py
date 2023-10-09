@@ -46,3 +46,30 @@ def get_trip_info(gtfs_tripid):
     data = r.json()
     trip = data["data"]["trip"]
     return trip
+
+query_pat="""
+    query PatternInfo($field: String!){
+    pattern(id: $field){
+      name
+      code
+      semanticHash
+      directionId
+      headsign
+      stops{
+        gtfsId
+        lat
+        lon
+      }
+      patternGeometry{
+        length
+        points
+      }
+    }
+}
+"""
+def get_pattern_info(patternCode): 
+    #"gtt:23673879U"
+    r = make_request("PatternInfo",dict(field=patternCode), query=query_pat)
+    data = r.json()
+    #
+    return data["data"]["pattern"]
