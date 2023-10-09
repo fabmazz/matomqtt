@@ -28,7 +28,27 @@ class PosUpdate(Base):
     def __hash__(self):
         return hash((self.line,self.veh,self.lat,self.lon, self.tripId, self.nextStop))
 
-    
+class GtfsTrip(Base):
+    __tablename__="gtfstrips"
+    gtfsId = Column(String(15),nullable=False, primary_key=True)
+    serviceId = Column(String(15),nullable=False)
+    routeId = Column(String(15),nullable=False)
+    patternCode = Column(String(15),nullable=False)
+"""
+class MatoPattern(Base):
+    __tablename__ = "matopatterns"
+
+
+ 'serviceId': 'gtt:502422U',
+ 'route': {'gtfsId': 'gtt:38U'},
+ 'pattern': {'code': 'gtt:38U:0:04'},
+ 'wheelchairAccessible': 'POSSIBLE',
+ 'activeDates': ['20231007'],
+ 'tripShortName': None,
+ 'tripHeadsign': 'MIRAFIORI SUD, P.LE CAIO MARIO',
+ 'bikesAllowed': 'ALLOWED',
+ 'semanticHash': '3Ep15Q:ktfRcQ'}
+"""  
 """
                 parsedMessage = {
                     lat: compat[0],
@@ -53,7 +73,7 @@ def make_update_json(data, line, veh, time_r=None):
         tripId = str(data[4]),
         direct = -5 if data[5] is None else int(data[5]),
         nextStop="-10" if data[6] is None else f"{data[6]}",
-        full = int(data[7]) if len(data)>7 else 0,
+        full = int(data[7]) if len(data)>7 else -10,
         timerec = int(time.time()) if time_r is None else time_r
         )
 

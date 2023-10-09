@@ -5,19 +5,25 @@ Created on Wed Jul 26 16:37:59 2023
 
 @author: fabio
 """
-from paho.mqtt.client import Client
 import logging
 import sys
 import time
 import json
 import random
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+
+from paho.mqtt.client import Client
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 import mysqlupds as ups
+import matolib
 from datescr import get_name_datetime
+
+executor = ThreadPoolExecutor(4)
+
 
 make_DB_name = lambda: f"passaggi_mato_{get_name_datetime(datetime.now())}.db"
 DB_NAME = make_DB_name()
@@ -32,8 +38,26 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 LIST_ADD = set() #[]
+TRIPS_DOWN = []
+DOWNLOADED_TRIPS = set()
 format_date_sec = lambda date : f"{date.year}{date.month:02d}{date.day:02d}{date.hour:02d}{date.minute:02d}{date.second:02d}"
 
+def download_tripinfo(tripNumeric):
+    gtfsid=f"gtt:{tripNumeric}U"
+    if gtfsid in DOWNLOADED_TRIPS:
+        ## already downloaded
+        return
+    try:
+        trip_d = matolib.get_trip_info(gtfsid)
+
+        tripelm = ups.GtfsTrip(gtfsId=trip_d["gtfsId"], serviceId=trip_d["serviceId"],
+                               routeId=trip_d["route"]["gtfsId"], patternCode=trip_d["pattern"]["code"])
+        
+        TRIPS_DOWN.append(tripelm)
+        DOWNLOADED_TRIPS.add(gtfsid)
+    except Exception:
+        ### nothing work
+        print(f"Failed to download data for trip {tripNumeric}",file=sys.stderr)
 
 def on_message(mosq, obj, msg):
     global COUNT_ADD, LIST_ADD
@@ -47,6 +71,8 @@ def on_message(mosq, obj, msg):
         #nowt = datetime.now()
         posup = ups.make_update_json(mm, line, veh) # time_r=format_date_sec(nowt))
         
+        executor.submit(download_tripinfo, posup.tripId)
+
         ### add to session
         #dbsess.add(posup)
         LIST_ADD.add(posup)
@@ -62,6 +88,9 @@ def on_connect(client, userdata, flags, rc):
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
     client.subscribe("#")
+
+
+
 csname = f'{random.randrange(16**6):06x}'
 client = Client(f"mtss-ajino-{csname}",transport="websockets")
 
@@ -100,8 +129,11 @@ try:
             continue
         listadd=LIST_ADD
         LIST_ADD = set()
+        trips_add = TRIPS_DOWN
+        TRIPS_DOWN = list()
         print(f"inserting {len(listadd)} updates - {int(time.time())}")
         dbsess.add_all(listadd)
+        dbsess.add_all(trips_add)
         dbsess.commit()
         ### check if to cut database
         if make_DB_name() != DB_NAME:
