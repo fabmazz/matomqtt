@@ -160,7 +160,8 @@ try:
         dbsess.add_all(listadd)
         dbsess.add_all(trips_add)
         dbsess.commit()
-        iolib.save_json_zstd(PATTERNS_FNAME, PATTERNS_DOWN, level=10)
+        patterns_down = dict(PATTERNS_DOWN)
+        iolib.save_json_zstd(PATTERNS_FNAME, patterns_down, level=10)
         ### check if to cut database
         if make_DB_name() != DB_NAME:
             ##close DB
@@ -170,7 +171,7 @@ try:
             enginedb = create_engine(f"sqlite:///{DB_NAME}",future=True)
             dbsess = start_db_session(enginedb)
             PATTERNS_FNAME =Path(f"patterns_{get_name_datetime(datetime.now())}.json.zstd")
-
+            PATTERNS_DOWN = {}
         
         COUNT_ADD = 0
 except Exception as e: 
