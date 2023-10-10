@@ -30,7 +30,8 @@ class PosUpdate(Base):
 
 class GtfsTrip(Base):
     __tablename__="gtfstrips"
-    gtfsId = Column(String(15),nullable=False, primary_key=True)
+    id = Column(Integer,primary_key=True, autoincrement=True)
+    gtfsId = Column(String(15),nullable=False)
     serviceId = Column(String(15),nullable=False)
     routeId = Column(String(15),nullable=False)
     patternCode = Column(String(15),nullable=False)

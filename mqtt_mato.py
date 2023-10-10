@@ -60,7 +60,11 @@ def download_patternInfo(patterncode):
         print(f"Cannot download pattern {patterncode}, ex: {e}", file=sys.stderr)
 
 def download_tripinfo(tripNumeric):
+    
     gtfsid=f"gtt:{tripNumeric}U"
+    if gtfsid=="gtt:NoneU":
+        # in some cases the trip is a text 'None'
+        return
     if gtfsid in DOWNLOADED_TRIPS:
         ## already downloaded
         return
@@ -78,6 +82,7 @@ def download_tripinfo(tripNumeric):
             executor.submit(download_patternInfo, patCode)
     except Exception as e:
         ### nothing work
+        print(f"Download info for trip {tripNumeric}, type {type(tripNumeric)}, gtfsid: {gtfsid}")
         print(f"Failed to download data for trip {tripNumeric}, error: {e}",file=sys.stderr)
 
 def on_message(mosq, obj, msg):
@@ -92,7 +97,8 @@ def on_message(mosq, obj, msg):
         #nowt = datetime.now()
         posup = ups.make_update_json(mm, line, veh) # time_r=format_date_sec(nowt))
         
-        executor.submit(download_tripinfo, posup.tripId)
+        if posup.tripId is not None or posup.tripId != "None":
+            executor.submit(download_tripinfo, posup.tripId)
 
         ### add to session
         #dbsess.add(posup)
