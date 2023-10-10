@@ -37,7 +37,7 @@ else:
     PATTERNS_DOWN = {}
 
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.ERROR)
 
 handler = logging.StreamHandler(sys.stdout)
 #handler.setLevel(logging.DEBUG)
@@ -56,8 +56,8 @@ def download_patternInfo(patterncode):
 
         code = pattern["code"]
         PATTERNS_DOWN[code] = pattern
-    except Exception:
-        print(f"Cannot download pattern {patterncode}")
+    except Exception as e:
+        print(f"Cannot download pattern {patterncode}, ex: {e}", file=sys.stderr)
 
 def download_tripinfo(tripNumeric):
     gtfsid=f"gtt:{tripNumeric}U"
@@ -76,9 +76,9 @@ def download_tripinfo(tripNumeric):
         patCode = tripelm.patternCode
         if(patCode not in PATTERNS_DOWN):
             executor.submit(download_patternInfo, patCode)
-    except Exception:
+    except Exception as e:
         ### nothing work
-        print(f"Failed to download data for trip {tripNumeric}",file=sys.stderr)
+        print(f"Failed to download data for trip {tripNumeric}, error: {e}",file=sys.stderr)
 
 def on_message(mosq, obj, msg):
     global COUNT_ADD, LIST_ADD
