@@ -185,6 +185,7 @@ try:
             dbsess = start_db_session(enginedb)
             PATTERNS_FNAME =Path(f"patterns_{get_name_datetime(datetime.now())}.json.zstd")
             PATTERNS_DOWN = {}
+            N_SAVED_PATTERNS = 0
         
         COUNT_ADD = 0
 except Exception as e: 
