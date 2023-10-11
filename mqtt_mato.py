@@ -36,6 +36,8 @@ else:
     print("No patterns file")
     PATTERNS_DOWN = {}
 
+N_SAVED_PATTERNS = len(PATTERNS_DOWN)
+
 logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
 
@@ -162,9 +164,12 @@ try:
         LIST_ADD = set()
         trips_add = TRIPS_DOWN
         TRIPS_DOWN = list()
-        patterns_down = dict(PATTERNS_DOWN)
-        print(f"Save {len(patterns_down)} patterns")
-        iolib.save_json_zstd(PATTERNS_FNAME, patterns_down, level=10)
+        if len(PATTERNS_DOWN) > N_SAVED_PATTERNS:
+            patterns_down = dict(PATTERNS_DOWN)
+            print(f"Save {len(patterns_down)} patterns")
+            saved = iolib.save_json_zstd(PATTERNS_FNAME, patterns_down, level=10)
+            if saved: 
+                N_SAVED_PATTERNS = len(patterns_down)
         print(f"inserting {len(listadd)} updates - {int(time.time())}")
         dbsess.add_all(listadd)
         dbsess.add_all(trips_add)
