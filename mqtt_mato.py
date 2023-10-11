@@ -162,12 +162,14 @@ try:
         LIST_ADD = set()
         trips_add = TRIPS_DOWN
         TRIPS_DOWN = list()
+        patterns_down = dict(PATTERNS_DOWN)
+        print(f"Save {len(patterns_down)} patterns")
+        iolib.save_json_zstd(PATTERNS_FNAME, patterns_down, level=10)
         print(f"inserting {len(listadd)} updates - {int(time.time())}")
         dbsess.add_all(listadd)
         dbsess.add_all(trips_add)
         dbsess.commit()
-        patterns_down = dict(PATTERNS_DOWN)
-        iolib.save_json_zstd(PATTERNS_FNAME, patterns_down, level=10)
+
         ### check if to cut database
         if make_DB_name() != DB_NAME:
             ##close DB
