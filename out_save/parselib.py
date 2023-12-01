@@ -119,3 +119,54 @@ def speed_smooth(dist, times_s, w):
         res[t] = sum(dist[lt:t+1]) /sum(times_s[lt:t+1]) *3.6
     
     return res
+
+fast_dist = lambda geom: haversine_distance(geom[:-1,0],geom[:-1,1], geom[1:,0], geom[1:,1] )
+
+def add_midpoints_trace(geom, dist, max_dist, idc_point, verbose=False):
+    assert len(geom) == len(dist)+1
+
+    geom2 = geom ## shallow copy, it's overwritten later
+
+    npoints = int(dist[idc_point] / max_dist)
+    npoints, idc_point
+
+    stepx = (geom[idc_point+1,0]-geom[idc_point,0])/(npoints+1)
+    stepy = (geom[idc_point+1,1]-geom[idc_point,1])/(npoints+1)
+    #newps=[]
+    steps = np.array([stepx, stepy])
+    if verbose: print("steps: ",steps)
+
+    for i in range(npoints):
+        newp = geom[idc_point]+steps*(i+1)
+        #[geom[idc_dist,0]+stepx*(i+1), geom[idc_dist,1]+stepy*(i+1)]
+        if verbose: print(newp)
+        geom2 = np.insert(geom2, idc_point+i+1, newp, axis=0)
+
+    return geom2, npoints
+
+"""
+Put the midpoints inside a trace (list of (lat, lon) coordinates) for each segment with a distance lower than max
+"""
+def put_midpoints_trace(geom, max_dist):
+    added_pts = 0
+    geom2 = geom
+    dist_u = fast_dist(geom2) #mlib.haversine_distance(geom2[:-1,0],geom2[:-1,1], geom2[1:,0], geom2[1:,1] )
+    sv_dist = (sum(dist_u))
+    nt= 0
+    while (dist_u.max()> max_dist):
+        nt+=1
+        if nt > 2000:
+            print("BREAK")
+            break
+        print(added_pts)
+
+        idc_dist = np.where(dist_u > max_dist)[0] [0]
+        #print("idc:",np.where(dist_u > max_dist)[0])
+
+        geom2,npp = add_midpoints_trace(geom2, dist_u, max_dist,idc_dist)
+
+        added_pts += npp
+        dist_u = fast_dist(geom2)
+    
+    print(sum(dist_u)-sv_dist)
+    return geom2, dist_u
