@@ -90,6 +90,23 @@ def find_speed_trip(df_trip, first_idx=-20, window=4):
                             ])
 
     return trace_df, firstindex
+"""
+New function to calculate the speed (computes time and space differences)
+"""
+def calc_speed_trip(dft):
+    tdiff = dft["timerec"].diff(null_behavior="drop")
+    delta_s = tdiff.dt.seconds().alias("diff_s")
+    assert np.all(delta_s.to_numpy()>0)
+
+    diff_metr = dist_trace_df(dft).alias("diff_m")
+
+    lat_avg = (dft[:-1,"lat"]+dft[1:, "lat"])/2
+    lon_avg = (dft[:-1,"lon"]+dft[1:, "lon"])/2
+    tr=dft["timerec"].to_pandas()
+
+    return lat_avg.hstack(lon_avg).hstack([diff_metr, delta_s,
+       pl.Series((tr+tdiff.to_pandas()/2)[:-1]).alias("t_mean")]).with_columns(
+        (pl.col("diff_m")*3.6/pl.col("diff_s")).alias("speed_kms"))
 
 def smooth_window(signal, w):
     T=len(signal)
@@ -122,6 +139,9 @@ def speed_smooth(dist, times_s, w):
 
 fast_dist = lambda geom: haversine_distance(geom[:-1,0],geom[:-1,1], geom[1:,0], geom[1:,1] )
 
+def dist_trace_df(df):
+    return haversine_distance(df["lat"][:-1], df["lon"][:-1], df["lat"][1:], df["lon"][1:]).rename("distance")
+
 def add_midpoints_trace(geom, dist, max_dist, idc_point, verbose=False):
     assert len(geom) == len(dist)+1
 
@@ -147,7 +167,7 @@ def add_midpoints_trace(geom, dist, max_dist, idc_point, verbose=False):
 """
 Put the midpoints inside a trace (list of (lat, lon) coordinates) for each segment with a distance lower than max
 """
-def put_midpoints_trace(geom, max_dist):
+def put_midpoints_trace_all(geom, max_dist,v=False):
     added_pts = 0
     geom2 = geom
     dist_u = fast_dist(geom2) #mlib.haversine_distance(geom2[:-1,0],geom2[:-1,1], geom2[1:,0], geom2[1:,1] )
@@ -158,7 +178,7 @@ def put_midpoints_trace(geom, max_dist):
         if nt > 2000:
             print("BREAK")
             break
-        print(added_pts)
+        if v: print(added_pts)
 
         idc_dist = np.where(dist_u > max_dist)[0] [0]
         #print("idc:",np.where(dist_u > max_dist)[0])
@@ -170,3 +190,47 @@ def put_midpoints_trace(geom, max_dist):
     
     print(sum(dist_u)-sv_dist)
     return geom2, dist_u
+
+def perf_average_if_poss(df, max_dist=130):
+    coord =  (df["lat"].mean(), df["lon"].mean())
+    dist_all = haversine_distance(df["lat"], df["lon"], *coord).to_numpy()
+    #dists = (mlib.haversine_distance(df["lat"].max(), coord[1], df["lat"].min(), coord[1]),
+    #         mlib.haversine_distance(coord[0],df["lon"].max(), coord[0], df["lon"].min()))
+    if np.min(dist_all) > max_dist:
+        return None
+    
+    draw=df[0:1].clone()
+    draw[0,"lat"]=coord[0]
+    draw[0,"lon"]= coord[1]
+    draw[0,"heading"] = (df["heading"].mean())
+    draw[0,"speed"]=0.
+    
+    return draw #pl.from_dict(draw)
+
+def average_times_if_needed(df_trip):
+    dfin = df_trip.sort("timerec")
+    out=[]
+    n_tot = 0
+    n_ref = 0
+    if not (dfin.group_by("timerec").count()["count"]>1).any():
+        #print(f"key {k} nothing to do")
+        #print(dfin.group_by("timerec").count())
+        return dfin
+    
+    for tt, df in dfin.group_by("timerec"):
+        #print(tt)
+        n_tot +=1
+        if len(df) > 1:
+            re=perf_average_if_poss(df)
+            if re is not None:
+                out.append(re)
+            else:
+                n_ref +=1
+        else:
+            out.append(df)
+    if len(out) == 0:
+        #ltime=(dfin["timerec"][-1]-dfin["timerec"][0]).total_seconds()
+        #if dfin
+        return None
+    dfnew = pl.concat(out).sort("timerec")
+    return dfnew
