@@ -80,3 +80,18 @@ def make_update_json(data, line, veh, time_r=None):
 
 def insert_update(dbupdate: PosUpdate,session: Session ):
     session.add(dbupdate)
+
+
+def get_update_data(data, line, veh, time_r=None):
+    data = dict(line=line,veh=veh, 
+        lat=float(data[0]),
+        lon=float(data[1]),
+        heading=clsorNone(int,data[2]),
+        speed=clsorNone(int,data[3]),
+        tripId = str(data[4]),
+        direct = -5 if data[5] is None else int(data[5]),
+        nextStop="-10" if data[6] is None else f"{data[6]}",
+        full = int(data[7]) if len(data)>7 else -10,
+        timerec = int(time.time()) if time_r is None else time_r
+        )
+    

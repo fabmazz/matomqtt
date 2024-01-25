@@ -10,6 +10,7 @@ import sys
 import time
 import json
 import random
+from threading import Lock
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -18,17 +19,31 @@ from paho.mqtt.client import Client
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-import mysqlupds as ups
-import matolib, iolib
-from datescr import get_name_datetime
+import matoupdates.mysqlupds as ups
+import matoupdates.pos_update as posups
+import matoupdates.matolib as matolib
+import matoupdates.iolib as iolib
+import matoupdates.datescr as datelib #import get_name_datetime, make_basename_updates, timestamp
 
-executor = ThreadPoolExecutor(4)
+### CONSTANTS
+MAX_UPS_FILE = 2000
+
+executor = ThreadPoolExecutor(2)
+##globals
+UPDATES_LOCK = Lock()
+TRIPS_LOCK = Lock()
+UPDATES_DOWNLOADED = []
+HASH_UPS_DOWN = set()
+COUNT_ADD = 0
+
+FOLDER_SAVE = Path("ups_data")
 
 
-make_DB_name = lambda: f"passaggi_mato_{get_name_datetime(datetime.now())}.db"
+make_DB_name = lambda: f"passaggi_mato_{datelib.get_name_datetime(datetime.now())}.db"
 DB_NAME = make_DB_name()
+UPDS_BASE_NAME= datelib.make_basename_updates()
 
-PATTERNS_FNAME =Path(f"patterns_{get_name_datetime(datetime.now())}.json.zstd")
+PATTERNS_FNAME =Path(f"patterns_{datelib.get_name_datetime(datetime.now())}.json.zstd")
 
 if(PATTERNS_FNAME.exists()):
     PATTERNS_DOWN = iolib.read_json_zstd(PATTERNS_FNAME)
@@ -75,9 +90,9 @@ def download_tripinfo(tripNumeric):
 
         tripelm = ups.GtfsTrip(gtfsId=trip_d["gtfsId"], serviceId=trip_d["serviceId"],
                                routeId=trip_d["route"]["gtfsId"], patternCode=trip_d["pattern"]["code"])
-        
-        TRIPS_DOWN.append(tripelm)
-        DOWNLOADED_TRIPS.add(gtfsid)
+        with TRIPS_LOCK:
+            TRIPS_DOWN.append(tripelm)
+            DOWNLOADED_TRIPS.add(gtfsid)
 
         patCode = tripelm.patternCode
         if(patCode not in PATTERNS_DOWN):
@@ -88,24 +103,28 @@ def download_tripinfo(tripNumeric):
         print(f"Failed to download data for trip {tripNumeric}, error: {e}",file=sys.stderr)
 
 def on_message(mosq, obj, msg):
-    global COUNT_ADD, LIST_ADD
+    global UPDATES_LOCK, UPDATES_DOWNLOADED, HASH_UPS_DOWN, COUNT_ADD
     mess=str(msg.payload,"utf-8")
     try:
         mm=json.loads(mess)
     
         _, line, veh = msg.topic.split("/")
-        #print(msg.topic + f" {line} {veh} " + str(msg.qos) + " "+str(mm) )
-        #print(f"line {line} v {veh}, payload {mm}")
-        #nowt = datetime.now()
-        posup = ups.make_update_json(mm, line, veh) # time_r=format_date_sec(nowt))
-        
-        if posup.tripId is not None or posup.tripId != "None":
-            executor.submit(download_tripinfo, posup.tripId)
 
+        #posup = ups.make_update_json(mm, line, veh) # time_r=format_date_sec(nowt))
+        posHash, posUpdate = posups.get_update_data(mm, line, veh)
+
+        if posUpdate.tripId is not None or posUpdate.tripId != "None":
+                executor.submit(download_tripinfo, posUpdate.tripId)
+
+        with UPDATES_LOCK:
+            if posHash not in HASH_UPS_DOWN:
+                HASH_UPS_DOWN.add(posHash)
+                UPDATES_DOWNLOADED.append(posUpdate)
+                COUNT_ADD+=1
         ### add to session
         #dbsess.add(posup)
-        LIST_ADD.add(posup)
-        COUNT_ADD+=1
+        
+        
      
     except Exception as e:
         print(f"An error happened during decoding at time {int(time.time())}, message is: \n\t{mess},\n\texception: {e}",
@@ -140,7 +159,6 @@ client.connect("mapi.5t.torino.it",port=443,keepalive=60)
 #client.loop_forever(timeout=5,retry_first_connection=True)
 
 ## create db
-COUNT_ADD = 0
 enginedb = create_engine(f"sqlite:///{DB_NAME}",future=True)
 def start_db_session(engine):
     ups.Base.metadata.create_all(engine)
@@ -148,32 +166,59 @@ def start_db_session(engine):
 
 dbsess = start_db_session(enginedb)
 
+###generate name file
+UPS_FILE = FOLDER_SAVE / datelib.ups_name_file(UPDS_BASE_NAME)
+
 trips_pres = dbsess.scalars(select(ups.GtfsTrip)).all()
 for tr in trips_pres:
     DOWNLOADED_TRIPS.add(tr.gtfsId)
 
 client.loop_start()
+prev_len = 0
 try:
     while True:
         time.sleep(10)
         ### insert
         print(f"Should have {COUNT_ADD} entries now")
-        if len(LIST_ADD) < 200:
+        """if len(LIST_ADD) < 200:
             continue
         listadd=LIST_ADD
         LIST_ADD = set()
-        trips_add = TRIPS_DOWN
-        TRIPS_DOWN = list()
+        """
+        with UPDATES_LOCK:
+            ## lock down
+            nNew = len(UPDATES_DOWNLOADED) - prev_len 
+            if nNew < 300:
+                ## don't do anything
+                continue
+            print(f"have {nNew} new updates")
+            ## save the data
+            iolib.save_json_zstd(UPS_FILE,UPDATES_DOWNLOADED)
+
+            ## check if it is too many
+            if len(UPDATES_DOWNLOADED) > MAX_UPS_FILE:
+                ## change file name
+                UPDATES_DOWNLOADED = []
+                UPS_FILE = FOLDER_SAVE / datelib.ups_name_file(UPDS_BASE_NAME)
+            ## leave lock, updates are free
+        
+        # TRIPS
+        with TRIPS_LOCK:
+            trips_add = TRIPS_DOWN
+            TRIPS_DOWN = list()
+            dbsess.add_all(trips_add)
+            dbsess.commit()
+            ## leave lock
+        
         if len(PATTERNS_DOWN) > N_SAVED_PATTERNS:
             patterns_down = dict(PATTERNS_DOWN)
             print(f"Save {len(patterns_down)} patterns")
             saved = iolib.save_json_zstd(PATTERNS_FNAME, patterns_down, level=10)
             if saved: 
                 N_SAVED_PATTERNS = len(patterns_down)
-        print(f"inserting {len(listadd)} updates - {int(time.time())}")
-        dbsess.add_all(listadd)
-        dbsess.add_all(trips_add)
-        dbsess.commit()
+        #print(f"inserting {len(listadd)} updates - {int(time.time())}")
+        #dbsess.add_all(listadd)
+
 
         ### check if to cut database
         if make_DB_name() != DB_NAME:
@@ -183,7 +228,9 @@ try:
             print(f"Changing DB, new name: {DB_NAME}")
             enginedb = create_engine(f"sqlite:///{DB_NAME}",future=True)
             dbsess = start_db_session(enginedb)
-            PATTERNS_FNAME =Path(f"patterns_{get_name_datetime(datetime.now())}.json.zstd")
+            PATTERNS_FNAME =Path(f"patterns_{datelib.get_name_datetime(datetime.now())}.json.zstd")
+            UPDS_BASE_NAME = datelib.make_basename_updates()
+            UPS_FILE = FOLDER_SAVE / datelib.ups_name_file(UPDS_BASE_NAME)
             PATTERNS_DOWN = {}
             N_SAVED_PATTERNS = 0
         
@@ -191,16 +238,21 @@ try:
 except Exception as e: 
     print("Exception happened: ",e)
 finally:
-    print("Close DB")
+    print("Finish operation, save data and close DB")
     client.loop_stop()
-    listadd=LIST_ADD
-    LIST_ADD = set()
-    trips_add = TRIPS_DOWN
-    TRIPS_DOWN = list()
-    print(f"list add has {len(listadd)} items")
-    dbsess.add_all(listadd)
+    #listadd=LIST_ADD
+    #LIST_ADD = set()
+    with TRIPS_LOCK:
+        trips_add = TRIPS_DOWN
+        TRIPS_DOWN = list()
     dbsess.add_all(trips_add)
+    #print(f"list add has {len(listadd)} items")
+    #dbsess.add_all(listadd)
+    
     iolib.save_json_zstd(PATTERNS_FNAME, PATTERNS_DOWN, level=10)
+    with UPDATES_LOCK:
+        ## wait for threads to stop
+        iolib.save_json_zstd(UPS_FILE, UPDATES_DOWNLOADED)
     dbsess.commit()
     dbsess.close()
     executor.shutdown()
