@@ -215,6 +215,7 @@ try:
         with TRIPS_LOCK:
             trips_add = TRIPS_DOWN
             TRIPS_DOWN = list()
+            print(f"Have {len(trips_add)} new trips to add to the DB")
             dbsess.add_all(trips_add)
             dbsess.commit()
             ## leave lock
