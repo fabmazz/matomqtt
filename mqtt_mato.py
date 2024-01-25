@@ -26,7 +26,7 @@ import matoupdates.iolib as iolib
 import matoupdates.datescr as datelib #import get_name_datetime, make_basename_updates, timestamp
 
 ### CONSTANTS
-MAX_UPS_FILE = 2000
+MAX_UPS_FILE = 30_000
 
 executor = ThreadPoolExecutor(2)
 ##globals
@@ -112,9 +112,9 @@ def on_message(mosq, obj, msg):
 
         #posup = ups.make_update_json(mm, line, veh) # time_r=format_date_sec(nowt))
         posHash, posUpdate = posups.get_update_data(mm, line, veh)
-
-        if posUpdate.tripId is not None or posUpdate.tripId != "None":
-                executor.submit(download_tripinfo, posUpdate.tripId)
+        tripId = posUpdate["tripId"]
+        if tripId is not None or tripId != "None":
+                executor.submit(download_tripinfo, tripId)
 
         with UPDATES_LOCK:
             if posHash not in HASH_UPS_DOWN:
@@ -169,6 +169,9 @@ dbsess = start_db_session(enginedb)
 ###generate name file
 UPS_FILE = FOLDER_SAVE / datelib.ups_name_file(UPDS_BASE_NAME)
 
+if not FOLDER_SAVE.exists():
+    FOLDER_SAVE.mkdir(parents=True)
+
 trips_pres = dbsess.scalars(select(ups.GtfsTrip)).all()
 for tr in trips_pres:
     DOWNLOADED_TRIPS.add(tr.gtfsId)
@@ -179,7 +182,7 @@ try:
     while True:
         time.sleep(10)
         ### insert
-        print(f"Should have {COUNT_ADD} entries now")
+        #print(f"Should have {COUNT_ADD} entries now")
         """if len(LIST_ADD) < 200:
             continue
         listadd=LIST_ADD
@@ -188,18 +191,23 @@ try:
         with UPDATES_LOCK:
             ## lock down
             nNew = len(UPDATES_DOWNLOADED) - prev_len 
+            print(f"have {nNew} new updates")
             if nNew < 300:
                 ## don't do anything
                 continue
-            print(f"have {nNew} new updates")
+            
+            prev_len = len(UPDATES_DOWNLOADED)
             ## save the data
-            iolib.save_json_zstd(UPS_FILE,UPDATES_DOWNLOADED)
+            tt = time.time()
+            iolib.save_json_zstd(UPS_FILE,UPDATES_DOWNLOADED, level=8)
+            print(f"Saved {len(UPDATES_DOWNLOADED)} updates in {(time.time()-tt):4.3f} s")
 
             ## check if it is too many
             if len(UPDATES_DOWNLOADED) > MAX_UPS_FILE:
                 ## change file name
                 UPDATES_DOWNLOADED = []
                 UPS_FILE = FOLDER_SAVE / datelib.ups_name_file(UPDS_BASE_NAME)
+                prev_len = 0
             ## leave lock, updates are free
         
         # TRIPS
@@ -252,7 +260,9 @@ finally:
     iolib.save_json_zstd(PATTERNS_FNAME, PATTERNS_DOWN, level=10)
     with UPDATES_LOCK:
         ## wait for threads to stop
-        iolib.save_json_zstd(UPS_FILE, UPDATES_DOWNLOADED)
+        tt = time.time()
+        iolib.save_json_zstd(UPS_FILE,UPDATES_DOWNLOADED)
+        print(f"Saved updates in {(time.time()-tt):4.3f} s")
     dbsess.commit()
     dbsess.close()
     executor.shutdown()
