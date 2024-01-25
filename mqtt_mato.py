@@ -24,6 +24,7 @@ import matoupdates.pos_update as posups
 import matoupdates.matolib as matolib
 import matoupdates.iolib as iolib
 import matoupdates.datescr as datelib #import get_name_datetime, make_basename_updates, timestamp
+from matoupdates import iomsg
 
 ### CONSTANTS
 MAX_UPS_FILE = 30_000
@@ -199,7 +200,7 @@ try:
             prev_len = len(UPDATES_DOWNLOADED)
             ## save the data
             tt = time.time()
-            iolib.save_json_zstd(UPS_FILE,UPDATES_DOWNLOADED, level=8)
+            iomsg.save_msgpack_zstd(UPS_FILE,UPDATES_DOWNLOADED, level=5)
             print(f"Saved {len(UPDATES_DOWNLOADED)} updates in {(time.time()-tt):4.3f} s")
 
             ## check if it is too many
@@ -221,7 +222,7 @@ try:
         if len(PATTERNS_DOWN) > N_SAVED_PATTERNS:
             patterns_down = dict(PATTERNS_DOWN)
             print(f"Save {len(patterns_down)} patterns")
-            saved = iolib.save_json_zstd(PATTERNS_FNAME, patterns_down, level=10)
+            saved = iolib.save_json_zstd(PATTERNS_FNAME, patterns_down, level=5)
             if saved: 
                 N_SAVED_PATTERNS = len(patterns_down)
         #print(f"inserting {len(listadd)} updates - {int(time.time())}")
@@ -261,7 +262,7 @@ finally:
     with UPDATES_LOCK:
         ## wait for threads to stop
         tt = time.time()
-        iolib.save_json_zstd(UPS_FILE,UPDATES_DOWNLOADED)
+        iomsg.save_msgpack_zstd(UPS_FILE,UPDATES_DOWNLOADED, level=5)
         print(f"Saved updates in {(time.time()-tt):4.3f} s")
     dbsess.commit()
     dbsess.close()
