@@ -119,6 +119,9 @@ def on_message(mosq, obj, msg):
 
         with UPDATES_LOCK:
             if posHash not in HASH_UPS_DOWN:
+                if len(HASH_UPS_DOWN) > 5_000_000:
+                    print("Clean hashes")
+                    HASH_UPS_DOWN = set()
                 HASH_UPS_DOWN.add(posHash)
                 UPDATES_DOWNLOADED.append(posUpdate)
                 COUNT_ADD+=1
@@ -192,7 +195,7 @@ try:
         with UPDATES_LOCK:
             ## lock down
             nNew = len(UPDATES_DOWNLOADED) - prev_len 
-            print(f"have {nNew} new updates")
+            print(f"have {nNew} new updates - {int(time.time())}")
             if nNew < 300:
                 ## don't do anything
                 continue
@@ -240,7 +243,12 @@ try:
             dbsess = start_db_session(enginedb)
             PATTERNS_FNAME =Path(f"patterns_{datelib.get_name_datetime(datetime.now())}.json.zstd")
             UPDS_BASE_NAME = datelib.make_basename_updates()
-            UPS_FILE = FOLDER_SAVE / datelib.ups_name_file(UPDS_BASE_NAME)
+            ## change file name
+            with UPDATES_LOCK:
+                UPDATES_DOWNLOADED = []
+                HASH_UPS_DOWN = set()
+                UPS_FILE = FOLDER_SAVE / datelib.ups_name_file(UPDS_BASE_NAME)
+            
             PATTERNS_DOWN = {}
             N_SAVED_PATTERNS = 0
         
