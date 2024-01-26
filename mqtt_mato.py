@@ -27,7 +27,7 @@ import matoupdates.datescr as datelib #import get_name_datetime, make_basename_u
 from matoupdates import iomsg
 
 ### CONSTANTS
-MAX_UPS_FILE = 30_000
+MAX_UPS_FILE = 60_000
 
 executor = ThreadPoolExecutor(2)
 ##globals
@@ -182,6 +182,7 @@ for tr in trips_pres:
 
 client.loop_start()
 prev_len = 0
+runs_nosave = 0
 try:
     while True:
         time.sleep(10)
@@ -196,10 +197,13 @@ try:
             ## lock down
             nNew = len(UPDATES_DOWNLOADED) - prev_len 
             print(f"have {nNew} new updates - {int(time.time())}")
-            if nNew < 300:
+            if nNew < 800 and runs_nosave < 6:
                 ## don't do anything
+                runs_nosave += 1
                 continue
-            
+
+            #save
+            runs_nosave = 0
             prev_len = len(UPDATES_DOWNLOADED)
             ## save the data
             tt = time.time()
@@ -258,6 +262,13 @@ except Exception as e:
 finally:
     print("Finish operation, save data and close DB")
     client.loop_stop()
+    with UPDATES_LOCK:
+        ## wait for threads to stop
+        tt = time.time()
+        iomsg.save_msgpack_zstd(UPS_FILE,UPDATES_DOWNLOADED, level=5)
+        print(f"Saved updates in {(time.time()-tt):4.3f} s")
+    
+    iolib.save_json_zstd(PATTERNS_FNAME, PATTERNS_DOWN, level=10)
     #listadd=LIST_ADD
     #LIST_ADD = set()
     with TRIPS_LOCK:
@@ -267,12 +278,7 @@ finally:
     #print(f"list add has {len(listadd)} items")
     #dbsess.add_all(listadd)
     
-    iolib.save_json_zstd(PATTERNS_FNAME, PATTERNS_DOWN, level=10)
-    with UPDATES_LOCK:
-        ## wait for threads to stop
-        tt = time.time()
-        iomsg.save_msgpack_zstd(UPS_FILE,UPDATES_DOWNLOADED, level=5)
-        print(f"Saved updates in {(time.time()-tt):4.3f} s")
+    
     dbsess.commit()
     dbsess.close()
     executor.shutdown()
