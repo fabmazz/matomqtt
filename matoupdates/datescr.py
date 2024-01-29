@@ -24,5 +24,5 @@ def day_hour_min_sec(date: datetime=None):
         date = datetime.now()
     return f"{date.day:02d}{date.hour:02d}{date.minute:02d}{date.second:02d}"
 
-ups_name_file = lambda basename: f"{basename}_{day_hour_min_sec()}.msgpk.zstd"
+ups_name_file = lambda basename: f"{basename}_{day_hour_min_sec()}.msgpk.pb.zstd"
 

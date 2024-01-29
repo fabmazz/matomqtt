@@ -113,7 +113,7 @@ def on_message(mosq, obj, msg):
 
         #posup = ups.make_update_json(mm, line, veh) # time_r=format_date_sec(nowt))
         posHash, posUpdate = posups.get_update_data(mm, line, veh)
-        tripId = posUpdate["tripId"]
+        tripId = posUpdate.tripId #["tripId"]
         if tripId is not None or tripId != "None":
                 executor.submit(download_tripinfo, tripId)
 
@@ -123,7 +123,7 @@ def on_message(mosq, obj, msg):
                     print("Clean hashes")
                     HASH_UPS_DOWN = set()
                 HASH_UPS_DOWN.add(posHash)
-                UPDATES_DOWNLOADED.append(posUpdate)
+                UPDATES_DOWNLOADED.append(posUpdate.SerializeToString())
                 COUNT_ADD+=1
         ### add to session
         #dbsess.add(posup)
@@ -207,7 +207,7 @@ try:
             prev_len = len(UPDATES_DOWNLOADED)
             ## save the data
             tt = time.time()
-            iomsg.save_msgpack_zstd(UPS_FILE,UPDATES_DOWNLOADED, level=5)
+            iomsg.save_msgpack_zstd(UPS_FILE,UPDATES_DOWNLOADED, level=1)
             print(f"Saved {len(UPDATES_DOWNLOADED)} updates in {(time.time()-tt):4.3f} s")
 
             ## check if it is too many
@@ -265,7 +265,7 @@ finally:
     with UPDATES_LOCK:
         ## wait for threads to stop
         tt = time.time()
-        iomsg.save_msgpack_zstd(UPS_FILE,UPDATES_DOWNLOADED, level=5)
+        iomsg.save_msgpack_zstd(UPS_FILE,UPDATES_DOWNLOADED, level=1)
         print(f"Saved updates in {(time.time()-tt):4.3f} s")
     
     iolib.save_json_zstd(PATTERNS_FNAME, PATTERNS_DOWN, level=10)
