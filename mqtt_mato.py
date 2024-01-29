@@ -25,6 +25,7 @@ import matoupdates.matolib as matolib
 import matoupdates.iolib as iolib
 import matoupdates.datescr as datelib #import get_name_datetime, make_basename_updates, timestamp
 from matoupdates import iomsg
+from polars import DataFrame
 
 ### CONSTANTS
 MAX_UPS_FILE = 60_000
@@ -33,7 +34,7 @@ executor = ThreadPoolExecutor(2)
 ##globals
 UPDATES_LOCK = Lock()
 TRIPS_LOCK = Lock()
-UPDATES_DOWNLOADED = []
+UPDATES_DF :DataFrame= None
 HASH_UPS_DOWN = set()
 COUNT_ADD = 0
 
@@ -104,7 +105,7 @@ def download_tripinfo(tripNumeric):
         print(f"Failed to download data for trip {tripNumeric}, error: {e}",file=sys.stderr)
 
 def on_message(mosq, obj, msg):
-    global UPDATES_LOCK, UPDATES_DOWNLOADED, HASH_UPS_DOWN, COUNT_ADD
+    global UPDATES_LOCK, UPDATES_DF, HASH_UPS_DOWN, COUNT_ADD
     mess=str(msg.payload,"utf-8")
     try:
         mm=json.loads(mess)
@@ -123,7 +124,10 @@ def on_message(mosq, obj, msg):
                     print("Clean hashes")
                     HASH_UPS_DOWN = set()
                 HASH_UPS_DOWN.add(posHash)
-                UPDATES_DOWNLOADED.append(posUpdate)
+                if not isinstance(UPDATES_DF, DataFrame):
+                    UPDATES_DF = DataFrame(posUpdate)
+                else:
+                    UPDATES_DF.extend(DataFrame(posUpdate))
                 COUNT_ADD+=1
         ### add to session
         #dbsess.add(posup)
@@ -195,7 +199,7 @@ try:
         """
         with UPDATES_LOCK:
             ## lock down
-            nNew = len(UPDATES_DOWNLOADED) - prev_len 
+            nNew = len(UPDATES_DF) - prev_len 
             print(f"have {nNew} new updates - {int(time.time())}")
             if nNew < 800 and runs_nosave < 6:
                 ## don't do anything
@@ -204,16 +208,17 @@ try:
 
             #save
             runs_nosave = 0
-            prev_len = len(UPDATES_DOWNLOADED)
+            prev_len = len(UPDATES_DF)
             ## save the data
             tt = time.time()
-            iomsg.save_msgpack_zstd(UPS_FILE,UPDATES_DOWNLOADED, level=5)
-            print(f"Saved {len(UPDATES_DOWNLOADED)} updates in {(time.time()-tt):4.3f} s")
+            #iomsg.save_msgpack_zstd(UPS_FILE,UPDATES_DF, level=5)
+            UPDATES_DF.write_parquet(UPS_FILE, use_pyarrow=True, compression="lz4")
+            print(f"Saved {len(UPDATES_DF)} updates in {(time.time()-tt):4.3f} s")
 
             ## check if it is too many
-            if len(UPDATES_DOWNLOADED) > MAX_UPS_FILE:
+            if len(UPDATES_DF) > MAX_UPS_FILE:
                 ## change file name
-                UPDATES_DOWNLOADED = []
+                UPDATES_DF = None
                 UPS_FILE = FOLDER_SAVE / datelib.ups_name_file(UPDS_BASE_NAME)
                 prev_len = 0
             ## leave lock, updates are free
@@ -249,7 +254,7 @@ try:
             UPDS_BASE_NAME = datelib.make_basename_updates()
             ## change file name
             with UPDATES_LOCK:
-                UPDATES_DOWNLOADED = []
+                UPDATES_DF = None
                 HASH_UPS_DOWN = set()
                 UPS_FILE = FOLDER_SAVE / datelib.ups_name_file(UPDS_BASE_NAME)
             
@@ -265,7 +270,8 @@ finally:
     with UPDATES_LOCK:
         ## wait for threads to stop
         tt = time.time()
-        iomsg.save_msgpack_zstd(UPS_FILE,UPDATES_DOWNLOADED, level=5)
+        #iomsg.save_msgpack_zstd(UPS_FILE,UPDATES_DF, level=5)
+        UPDATES_DF.write_parquet(UPS_FILE, use_pyarrow=True, compression="lz4")
         print(f"Saved updates in {(time.time()-tt):4.3f} s")
     
     iolib.save_json_zstd(PATTERNS_FNAME, PATTERNS_DOWN, level=10)
