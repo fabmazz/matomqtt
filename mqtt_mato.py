@@ -35,6 +35,7 @@ executor = ThreadPoolExecutor(2)
 UPDATES_LOCK = Lock()
 TRIPS_LOCK = Lock()
 UPDATES_DF :DataFrame= None
+UPDATES_BUFFER = []
 HASH_UPS_DOWN = set()
 COUNT_ADD = 0
 
@@ -105,7 +106,7 @@ def download_tripinfo(tripNumeric):
         print(f"Failed to download data for trip {tripNumeric}, error: {e}",file=sys.stderr)
 
 def on_message(mosq, obj, msg):
-    global UPDATES_LOCK, UPDATES_DF, HASH_UPS_DOWN, COUNT_ADD
+    global UPDATES_LOCK, UPDATES_BUFFER, HASH_UPS_DOWN, COUNT_ADD
     mess=str(msg.payload,"utf-8")
     try:
         mm=json.loads(mess)
@@ -124,10 +125,12 @@ def on_message(mosq, obj, msg):
                     print("Clean hashes")
                     HASH_UPS_DOWN = set()
                 HASH_UPS_DOWN.add(posHash)
-                if not isinstance(UPDATES_DF, DataFrame):
+                """if not isinstance(UPDATES_DF, DataFrame):
                     UPDATES_DF = DataFrame(posUpdate)
                 else:
                     UPDATES_DF.extend(DataFrame(posUpdate))
+                """
+                UPDATES_BUFFER.append(posUpdate)
                 COUNT_ADD+=1
         ### add to session
         #dbsess.add(posup)
@@ -199,6 +202,15 @@ try:
         """
         with UPDATES_LOCK:
             ## lock down
+            ## move updates from buffer to df
+            t0=time.time()
+            df_new = DataFrame(UPDATES_BUFFER)
+            UPDATES_BUFFER = []
+            if isinstance(UPDATES_DF, DataFrame):
+                UPDATES_DF.vstack(df_new, in_place=True)
+            else:
+                UPDATES_DF = df_new
+            print(f"df ops took {time.time()-t0:4.3f} s")
             nNew = len(UPDATES_DF) - prev_len 
             print(f"have {nNew} new updates - {int(time.time())}")
             if nNew < 800 and runs_nosave < 6:
@@ -212,7 +224,7 @@ try:
             ## save the data
             tt = time.time()
             #iomsg.save_msgpack_zstd(UPS_FILE,UPDATES_DF, level=5)
-            UPDATES_DF.write_parquet(UPS_FILE, use_pyarrow=True, compression="lz4")
+            UPDATES_DF.write_parquet(UPS_FILE, use_pyarrow=True, compression="zstd", compression_level=5)
             print(f"Saved {len(UPDATES_DF)} updates in {(time.time()-tt):4.3f} s")
 
             ## check if it is too many
@@ -271,7 +283,7 @@ finally:
         ## wait for threads to stop
         tt = time.time()
         #iomsg.save_msgpack_zstd(UPS_FILE,UPDATES_DF, level=5)
-        UPDATES_DF.write_parquet(UPS_FILE, use_pyarrow=True, compression="lz4")
+        UPDATES_DF.write_parquet(UPS_FILE, use_pyarrow=True, compression="zstd", compression_level=5)
         print(f"Saved updates in {(time.time()-tt):4.3f} s")
     
     iolib.save_json_zstd(PATTERNS_FNAME, PATTERNS_DOWN, level=10)
