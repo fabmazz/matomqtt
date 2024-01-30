@@ -27,7 +27,7 @@ import matoupdates.datescr as datelib #import get_name_datetime, make_basename_u
 from matoupdates import iomsg
 
 ### CONSTANTS
-MAX_UPS_FILE = 60_000
+MAX_UPS_FILE = 100_000
 
 executor = ThreadPoolExecutor(2)
 ##globals
