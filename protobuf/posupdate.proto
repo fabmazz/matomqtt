@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+message PositionUpdate{
+    string line = 1;
+    string veh = 2;
+    double lat = 3;
+    double lon = 4;
+    optional int32 heading = 5;
+    optional int32 speed = 6;
+    optional string tripId = 7;
+    optional int32 direction = 8;
+    optional string nextStop = 9;
+    optional int32 full = 10;
+    optional int64 timerec = 11;
+}
